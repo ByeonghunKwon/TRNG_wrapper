@@ -50,7 +50,7 @@ module TRNG_CTRL(
     // Outputs to TOP
     // -------------------------
     output reg [143:0] DATA_OUT,
-    output reg err,
+    output reg err,            // used only for Write and Read when invalid addr
     output Done,
 
     // -------------------------
@@ -92,28 +92,30 @@ reg WRITE_DONE;
 reg SET_VAR_DONE;
 
 reg DETOUR_temp;
-reg RP_SET_temp;
+reg RP_SEL_temp;
 reg DMODE_READ_temp;
 reg DMODE_WRITE_temp;
 reg [8:0] TRNG_MODE_temp;
 
 reg clkgen_rstn;
 reg cnt_rstn;
+reg [4:0] cnt;
+
+reg [10:0] WR_ADDR;    // input ADDR x 18 + cnt
+reg [3:0] WR_cnt;
 
 always @(posedge clk) begin
-
     if (!rstn) begin
-        
-        // resetting output signals     //! bit 수 확인해서 채우기
+        // resetting output signals 
         csn <= n'd1;
         wen <= n'd1;
         ROW_ADDR <= 8'd0;
         COL_ADDR <= 4'd0;
-        DETOUR <= n'd0;
-        RP_SEL <= n'd0;
-        DMODE <= n'd0;
-        DATA <= n'd0;
-        TRNG_MODE <= n'd0;
+        DETOUR <= 2'd0;
+        RP_SEL <= 1'd0;
+        DMODE <= 6'd0;
+        DATA <= 8'd0;
+        TRNG_MODE <= 9'd0;
 
         DATA_OUT <= 144'd0;
         err <= 1'd0;
@@ -133,11 +135,16 @@ always @(posedge clk) begin
         WRITE_DONE <= 1'b0;
         SET_VAR_DONE <= 1'b0;
 
+        // resetting operation signals
+        // for write/read
+        WR_ADDR <= 11'd0;
+        WR_cnt <= 4'd0;
+
     end else begin
         case (CMD)
-            RNG: begin
+            // RNG: begin
 
-            end
+            // end
             SET_VAR: begin
 
                 clkgen_rstn <= 1'b0;
@@ -147,7 +154,7 @@ always @(posedge clk) begin
                     // starting SET_VAR
                     if (!SET_VAR_working) begin
                         DETOUR_temp <= DETOUR;
-                        RP_SET_temp <= RP_SET;
+                        RP_SEL_temp <= RP_SEL;
                         DMODE_READ_temp <= DMODE_READ;
                         DMODE_WRITE_temp <= DMODE_WRITE;
                         TRNG_MODE_temp <= TRNG_MODE;
@@ -158,7 +165,7 @@ always @(posedge clk) begin
                     // resetting SET_VAR ctrl signals
                     else begin
                         DETOUR_temp <= DETOUR_temp;
-                        RP_SET_temp <= RP_SET_temp;
+                        RP_SEL_temp <= RP_SEL_temp;
                         DMODE_READ_temp <= DMODE_READ_temp;
                         DMODE_WRITE_temp <= DMODE_WRITE_temp;
                         TRNG_MODE_temp <= TRNG_MODE_temp;
@@ -168,7 +175,7 @@ always @(posedge clk) begin
                     end
                 end else begin
                     DETOUR_temp <= DETOUR_temp;
-                    RP_SET_temp <= RP_SET_temp;
+                    RP_SEL_temp <= RP_SEL_temp;
                     DMODE_READ_temp <= DMODE_READ_temp;
                     DMODE_WRITE_temp <= DMODE_WRITE_temp;
                     TRNG_MODE_temp <= TRNG_MODE_temp;
@@ -181,64 +188,190 @@ always @(posedge clk) begin
                 if (start) begin
                     // the first cycle after start signal
                     if (!WRITE_working) begin
-
-                        // when improper address is given
+                        // Error : when improper address is given
                         if (ADDR > 113) begin
+                            clkgen_rstn <= 1'b0;
+                            cnt_rstn <= 1'b0;      
+
+                            WR_ADDR <= 11'd0;
+                            DETOUR <= 2'b00; 
+                            RP_SEL <= 1'b0; 
+                            DMODE <= 6'd0; 
+                            DATA <= 8'd0; 
+                            // TRNG_MODE <= TRNG_MODE_temp;
+
                             WRITE_working <= 1'b1;
                             WRITE_DONE <= 1'b1;
                             err <= 1'b1;
+                            WR_cnt <= 4'd0;
                         end
                         // normal operation
                         else begin
-                        clkgen_rstn <= 1'b0;
-                        cnt_rstn <= 1'b1;                        
+                            clkgen_rstn <= 1'b0;
+                            cnt_rstn <= 1'b1;                        
 
-                        ROW_ADDR
-                        COL_ADDR
-                        DETOUR
-                        RP_SEL
-                        DMODE
-                        DATA
-                        TRNG_MODE
+                            WR_ADDR <= ADDR[6:0] * 18;
+                            DETOUR <= 2'b00; 
+                            RP_SEL <= RP_SEL_temp; 
+                            DMODE <= 6'b11_1111; 
+                            DATA <= DATA_temp; 
+                            // TRNG_MODE <= TRNG_MODE_temp;
 
-                        WRITE_DONE <= 1'b0;
-                        WRITE_working <= 1'b1;
+                            WRITE_working <= 1'b1;
+                            WRITE_DONE <= 1'b0;
+                            err <= 1'b0;
+                            WR_cnt <= 4'd1;
                         end
-
                     end
                     else begin
-                        WRITE_DONE <= 1'b0;
-                        WRITE_working <= 1'b1;
+                        if (err) begin
+                            clkgen_rstn <= 1'b0;
+                            cnt_rstn <= 1'b0;      
+
+                            WR_ADDR <= 11'd0;
+                            DETOUR <= 2'b00; 
+                            RP_SEL <= 1'b0; 
+                            DMODE <= 6'd0; 
+                            DATA <= 8'd0; 
+                            // TRNG_MODE <= TRNG_MODE_temp;
+
+                            WRITE_working <= 1'b0;
+                            WRITE_DONE <= 1'b0;
+                            err <= 1'b1;
+                            WR_cnt <= 4'd0;
+                        end
+                        else begin
+                            clkgen_rstn <= 1'b1;
+                            cnt_rstn <= 1'b1;                        
+
+                            WR_ADDR <= WR_ADDR;
+                            DETOUR <= 2'b00; 
+                            RP_SEL <= RP_SEL_temp; 
+                            DMODE <= 6'b11_1111; 
+                            DATA <= DATA_temp; 
+                            // TRNG_MODE <= TRNG_MODE_temp;
+
+                            WRITE_working <= 1'b1;
+                            WRITE_DONE <= 1'b0;
+                            err <= 1'b0;
+                            WR_cnt <= 4'd1;
+                        end
                     end
-                // 18 iterations
                 end else begin
+                    // 18 iterations
+                    if (WRITE_working) begin
+                        // WRITE
+                        if (WR_cnt < 4'd18 && cnt == 5'd20) begin
+                            clkgen_rstn <= 1'b1;
+                            cnt_rstn <= 1'b1;                        
 
+                            WR_ADDR <= WR_ADDR+ 1;
+                            DETOUR <= 2'b00; 
+                            RP_SEL <= RP_SEL_temp; 
+                            DMODE <= 6'b11_1111; 
+                            DATA <= DATA_temp; 
+                            // TRNG_MODE <= TRNG_MODE_temp;
+
+                            WRITE_working <= 1'b1;
+                            WRITE_DONE <= 1'b0;
+                            err <= 1'b0;
+                            WR_cnt <= WR_cnt + 1;
+                        end
+                        // the last state of write operation
+                        // resetting every signals after two cycle of done signal
+                        else if (WR_cnt == 4'd18) begin
+                            if (cnt == 5'd3) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn <= 1'b1;                        
+
+                                WR_ADDR <= WR_ADDR;
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= 6'b11_1111; 
+                                DATA <= DATA_temp; 
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                WRITE_working <= 1'b1;
+                                WRITE_DONE <= 1'b1;
+                                err <= 1'b0;
+                                // WR_cnt <= WR_cnt + 1;  
+                            end
+                            else if (cnt == 5'd5) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn <= 1'b0;                        
+
+                                WR_ADDR <= 11'd0;
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'd0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0; 
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                WRITE_working <= 1'b0;
+                                WRITE_DONE <= 1'b0;
+                                err <= 1'b0;
+                                // WR_cnt <= WR_cnt + 1;  
+                            end
+                        end
+                        // Retaining signals
+                        else begin
+                            clkgen_rstn <= clkgen_rstn;
+                            cnt_rstn <= cnt_rstn;                        
+
+                            WR_ADDR <= WR_ADDR;
+                            DETOUR <= DETOUR; 
+                            RP_SEL <= RP_SEL; 
+                            DMODE <= DMODE; 
+                            DATA <= DATA; 
+                            // TRNG_MODE <= TRNG_MODE_temp;
+
+                            WRITE_working <= WRITE_working;
+                            WRITE_DONE <= WRITE_DONE;
+                            err <= err;
+                            WR_cnt <= WR_cnt;                            
+                        end
+                    end
+                    else begin
+                        clkgen_rstn <= clkgen_rstn;
+                        cnt_rstn <= cnt_rstn;                        
+
+                        WR_ADDR <= WR_ADDR;
+                        DETOUR <= DETOUR; 
+                        RP_SEL <= RP_SEL; 
+                        DMODE <= DMODE; 
+                        DATA <= DATA; 
+                        // TRNG_MODE <= TRNG_MODE_temp;
+
+                        WRITE_working <= WRITE_working;
+                        WRITE_DONE <= WRITE_DONE;
+                        err <= err;
+                        WR_cnt <= WR_cnt;                                
+                    end
                 end
-
             end
-            READ: begin
+            // READ: begin
 
-            end
-            default: 
+            // end
+            // default: 
         endcase
     end
 end
 
 clk_generator clk_gen(clk_200, clk, clkgen_rstn);
 
-counter_14bit counter0(cnt, clk, cnt_rstn);
+count_20 counter0(cnt, clk, cnt_rstn);
 
 endmodule
 
-module counter_14bit(
-    output reg [13:0] q,
+module count_20(
+    output reg [4:0] q,
     input clk,
     input rstn
 )
 
     always @(posedge clk) begin
         if (!rstn) begin
-            q <= 13'd0;
+            q <= 5'd0;
         end else begin
             q <= q + 1;
         end
