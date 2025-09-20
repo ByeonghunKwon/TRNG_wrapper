@@ -6,7 +6,7 @@
 // start_TOP       (1) --->|                   | ---> start       (1)
 // rstn            (1) --->|                   |
 //                         |                   |
-// ADDR_TOP       (12) --->|                   | ---> ADDR        (12)
+// ADDR_TOP       (12) --->|                   | ---> ADDR       (12)
 // DETOUR_IN_TOP   (2) --->|                   | ---> DETOUR_IN   (2)
 // RP_SEL_IN_TOP   (1) --->|      wrapper      | ---> RP_SEL_IN   (1)
 // DMODE_WRITE_TOP (6) --->|                   | ---> DMODE_WRITE (6)
@@ -15,8 +15,9 @@
 // TRNG_MODE_TOP   (9) --->|                   | ---> TRNG_MODE   (9)
 // TRNG_BIT_TOP    (3) --->|                   | ---> TRNG_BIT    (3)
 // MEM_IN_TOP    (144) --->|                   | ---> MEM_IN    (144)
+// DATA_TRNG_TOP   (1) --->|                   | ---> DATA_TRNG   (1)
 //                         |                   |
-// MEM_OUT_TOP   (144) <---|                   | <--- MEM_OUT    (144)
+// MEM_OUT_TOP   (144) <---|                   | <--- MEM_OUT   (144)
 // Done_TOP        (1) <---|                   | <--- Done        (1)
 // err_TOP         (1) <---|                   | <--- err         (1)
 //                         |                   |
@@ -41,6 +42,7 @@ module TRNG_wrapper (
     input  [8:0]  TRNG_MODE_TOP,
     input  [2:0]  TRNG_BIT_TOP,
     input  [143:0] MEM_IN_TOP,
+    input          DATA_TRNG_TOP,
 
     // -------------------------
     // To TOP
@@ -62,6 +64,7 @@ module TRNG_wrapper (
     output reg [8:0]   TRNG_MODE,
     output reg [2:0]   TRNG_BIT,
     output reg [143:0] MEM_IN,
+    output reg         DATA_TRNG, 
 
     // -------------------------
     // From MRAM
@@ -83,6 +86,7 @@ always @(posedge clk) begin
         TRNG_MODE   <= 9'd0;
         TRNG_BIT    <= 3'd0;
         MEM_IN      <= 144'd0;
+        DATA_TRNG   <= 1'b0;
 
         MEM_OUT_TOP <= 144'd0;
         Done_TOP    <= 1'd0;
@@ -98,6 +102,7 @@ always @(posedge clk) begin
         TRNG_MODE   <= TRNG_MODE_TOP;
         TRNG_BIT    <= TRNG_BIT_TOP;
         MEM_IN      <= MEM_IN_TOP;
+        DATA_TRNG   <= DATA_TRNG_TOP;
 
         MEM_OUT_TOP <= MEM_OUT;
         Done_TOP    <= Done;
