@@ -82,7 +82,7 @@ module TB_TRNG_CTRL;
   // -------------------------
   // Stimulus 
   // -------------------------
-  localparam RNG     = 2'b00;
+  localparam TRNG     = 2'b00;
   localparam SET_VAR = 2'b01;
   localparam WRITE   = 2'b10;
   localparam READ    = 2'b11;
@@ -96,7 +96,7 @@ module TB_TRNG_CTRL;
     // defaults
     rstn         = 1'b0;
     start        = 1'b0;
-    CMD          = RNG;
+    CMD          = TRNG;
     ADDR         = 12'd0;
     DETOUR_IN    = 2'b00;
     RP_SEL_IN    = 1'b0;
@@ -162,6 +162,176 @@ module TB_TRNG_CTRL;
 
     #5000;
 
+
+
+  // -------------------------
+  // read
+  // -------------------------
+
+
+    // 1. set_var
+    #30
+    CMD = SET_VAR;
+    #20;
+
+    DETOUR_IN    = 2'b10;
+    RP_SEL_IN    = 1'b1;
+    DMODE_WRITE  = 6'h3F;
+    DMODE_READ   = 6'h15;
+    TRNG_MODE_IN = 9'h1A5;
+    DATA_TRNG    = 1'b1;
+    start = 1'b1;
+
+    #20;
+    start = 1'b0;
+    #20;
+
+    // 2. read error
+    #40;
+    CMD = READ;
+    #20;
+
+    ADDR   = 12'd3000;
+    start = 1;
+
+    #20;
+    start = 1'b0;
+
+    #100;
+
+    // 3. normal read
+    #40;
+    CMD = READ;
+    #20;
+
+    ADDR   = 12'd30;
+    start = 1;
+
+    #20;
+    start = 1'b0;
+
+    #215;
+    OUTPUT = 8'h12;
+    #200;
+    OUTPUT = 8'h34;
+    #200;
+    OUTPUT = 8'h56;    
+
+    #5000;
+
+
+
+  // -------------------------
+  // TRNG_MODE0
+  // -------------------------
+
+
+    // 1. set_var
+    #30
+    CMD = SET_VAR;
+    #20;
+
+    DETOUR_IN    = 2'b10;
+    RP_SEL_IN    = 1'b1;
+    DMODE_WRITE  = 6'h26;
+    DMODE_READ   = 6'h03;
+    TRNG_MODE_IN = 9'h077;  // TRNG_MODE0
+    DATA_TRNG    = 1'b1;
+    start = 1'b1;
+
+    #20;
+    start = 1'b0;
+    #20;
+
+    // 2. trng error
+    #40;
+    CMD = TRNG;
+    #20;
+
+    ADDR   = 12'b1011_1010_1101;
+    start = 1;
+
+    #20;
+    start = 1'b0;
+
+    #100;
+
+    // 3. normal trng
+    #40;
+    CMD = TRNG;
+    #20;
+
+    ADDR   = 12'd30;
+    start = 1;
+
+    #20;
+    start = 1'b0;
+
+    // #215;
+    // OUTPUT = 8'h12;
+    // #200;
+    // OUTPUT = 8'h34;
+    // #200;
+    // OUTPUT = 8'h56;    
+
+    #13000;
+
+
+
+  // -------------------------
+  // TRNG_MODE0
+  // -------------------------
+
+
+    // 1. set_var
+    #30
+    CMD = SET_VAR;
+    #20;
+
+    DETOUR_IN    = 2'b10;
+    RP_SEL_IN    = 1'b1;
+    DMODE_WRITE  = 6'h26;
+    DMODE_READ   = 6'h03;
+    TRNG_MODE_IN = 9'h177;  // TRNG_MODE0
+    DATA_TRNG    = 1'b1;
+    start = 1'b1;
+
+    #20;
+    start = 1'b0;
+    #20;
+
+    // 2. trng error
+    #40;
+    CMD = TRNG;
+    #20;
+
+    ADDR   = 12'b1011_1010_1101;
+    start = 1;
+
+    #20;
+    start = 1'b0;
+
+    #100;
+
+    // 3. normal trng
+    #40;
+    CMD = TRNG;
+    #20;
+
+    ADDR   = 12'd70;
+    start = 1;
+
+    #20;
+    start = 1'b0;
+
+    // #215;
+    // OUTPUT = 8'h12;
+    // #200;
+    // OUTPUT = 8'h34;
+    // #200;
+    // OUTPUT = 8'h56;    
+
+    #100000;
 
 
   // -------------------------
