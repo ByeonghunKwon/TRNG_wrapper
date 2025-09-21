@@ -68,7 +68,7 @@ module TRNG_CTRL(
     input         RP_SEL_IN,
     input  [5:0]  DMODE_WRITE,
     input  [5:0]  DMODE_READ,
-    input  [2:0]  TRNG_BIT,
+    input  [2:0]  TRNG_BIT,     //! TODO 사용 목적 확인하기
     input  [143:0] MEM_IN,
     input  [8:0]  TRNG_MODE_IN,
     input         DATA_TRNG,
@@ -80,21 +80,22 @@ module TRNG_CTRL(
 );
 
 
-localparam RNG     = 2'b00;
+localparam TRNG     = 2'b00;
 localparam SET_VAR = 2'b01;
 localparam WRITE   = 2'b10;
 localparam READ    = 2'b11;
 
-reg RNG_working;
+reg TRNG_working;
 reg SET_VAR_working;
 reg WRITE_working;
 reg READ_working;
 
-reg RNG_DONE;
+reg TRNG_DONE;
 reg READ_DONE;
 reg WRITE_DONE;
 reg SET_VAR_DONE;
 
+// temp FFs for SET_VAR
 reg [1:0] DETOUR_temp;
 reg RP_SEL_temp;
 reg [5:0] DMODE_READ_temp;
@@ -102,14 +103,21 @@ reg [5:0] DMODE_WRITE_temp;
 reg [8:0] TRNG_MODE_temp;
 reg DATA_temp;
 
+// control signals for clock
 reg clkgen_rstn;
 reg cnt_rstn;
 wire [4:0] cnt;
+reg cnt_rstn2;
+wire [5:0] cnt2;
 
+// control signals for READ/WRITE
 reg [10:0] WR_ADDR;    // input ADDR x 18 + cnt
 reg [4:0] WR_cnt;
 
 reg [143:0] MEM_OUT_BUF;
+
+// control signals for TRNG      //! TODO rstn에서 초기화 하기
+reg [7:0] TRNG_cnt;    
 
 always @(posedge clk) begin
     if (!rstn) begin
@@ -122,22 +130,20 @@ always @(posedge clk) begin
         DATA <= 8'd0;
         TRNG_MODE <= 9'd0;
         MEM_OUT <= 144'd0;
-        MEM_OUT_BUF <= 144'd0;
-
-        MEM_OUT <= 144'd0;
         err <= 1'd0;
 
         // resetting clk/counter reset signals
         clkgen_rstn <= 1'b0;
         cnt_rstn <= 1'b0;
+        cnt_rstn2 <= 1'b0;
 
         // resetting working/done signals
-        RNG_working <= 1'b0;
+        TRNG_working <= 1'b0;
         SET_VAR_working <= 1'b0;
         WRITE_working <= 1'b0;
         READ_working <= 1'b0;
 
-        RNG_DONE <= 1'b0;
+        TRNG_DONE <= 1'b0;
         READ_DONE <= 1'b0;
         WRITE_DONE <= 1'b0;
         SET_VAR_DONE <= 1'b0;
@@ -146,7 +152,11 @@ always @(posedge clk) begin
         // for write/read
         WR_ADDR <= 11'd0;
         WR_cnt <= 5'd0;
+        MEM_OUT_BUF <= 144'd0;
+        // for TRNG
+        TRNG_cnt <= 8'd0; 
 
+        // resetting temp FFs
         DETOUR_temp <= 2'd0;
         RP_SEL_temp <= 1'd0;
         DMODE_READ_temp <= 6'd0;
@@ -154,16 +164,409 @@ always @(posedge clk) begin
         TRNG_MODE_temp <= 9'd0;
         DATA_temp <= 1'd0;
 
+
     end else begin
         case (CMD)
-            // RNG: begin
-            //     if (start) begin
+            TRNG: begin
+                // TRNG_MODE 0
+                if (!TRNG_MODE_temp[8]) begin       //! TODO TRNG_MODE output 확인하기
+                    if (start) begin
+                        if (!TRNG_working) begin
+                            // Error
+                            if (ADDR[11] == 1'b1) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
 
-            //     end
-            //     else begin
+                                csn <= 1'b1;
+                                wen <= 1'b1;
 
-            //     end
-            // end
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0; 
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b1;
+                                err <= 1'b1;
+                                TRNG_cnt <= 8'd0;
+                            end
+                            // normal operation
+                            else begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= 8'd1;
+                            end
+                        end
+                        else begin
+                            if (err) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0; 
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b0;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b1;
+                                TRNG_cnt <= 8'd0;
+                            end
+                            else begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= 8'd1;
+                            end
+                        end
+                    end
+                    else begin 
+                        if (TRNG_working) begin   
+                            // after TRNG write
+                            if (TRNG_cnt < 8'd19 && cnt2 == 6'd20) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= DMODE_READ_temp; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt; 
+                            end
+                            // after TRNG read
+                            else if (TRNG_cnt < 8'd19 && cnt2 == 6'd40) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= 6'b11_1111; 
+                                DATA <= {7'd0, !DATA_temp};
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt; 
+                            end
+                            // after TRNG reset
+                            else if (TRNG_cnt < 8'd18 && cnt2 == 6'd60) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= DMODE_WRITE_temp; 
+                                DATA <= {7'd0, DATA_temp};
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt + 1; 
+                            end
+                            // the last cycle
+                            else if (TRNG_cnt == 8'd18 && cnt2 == 6'd60) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b1;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt + 1;                                 
+                            end
+                            else if (TRNG_cnt == 8'd19 && cnt2 == 6'd1) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b0;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= 8'd0;                                 
+                            end
+                        end
+                        else begin
+                            clkgen_rstn   <= clkgen_rstn;
+                            cnt_rstn2     <= cnt_rstn2;
+
+                            csn           <= csn;
+                            wen           <= wen;
+
+                            DETOUR        <= DETOUR;
+                            RP_SEL        <= RP_SEL;
+                            DMODE         <= DMODE;
+                            DATA          <= DATA;
+                            // TRNG_MODE  <= TRNG_MODE;
+
+                            TRNG_working  <= TRNG_working;
+                            TRNG_DONE     <= TRNG_DONE;
+                            err           <= err;
+                            TRNG_cnt      <= TRNG_cnt;
+                        end
+                    end
+                end
+                // TRNG_MODE 1
+                else begin
+                    if (start) begin
+                        if (!TRNG_working) begin
+                            // Error
+                            if (ADDR[11] == 1'b1) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0; 
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b1;
+                                err <= 1'b1;
+                                TRNG_cnt <= 8'd0;
+                            end
+                            // normal operation
+                            else begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= 8'd1;
+                            end
+                        end
+                        else begin
+                            if (err) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0; 
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b0;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b1;
+                                TRNG_cnt <= 8'd0;
+                            end
+                            else begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= DMODE_WRITE_temp; 
+                                DATA <= {7'd0, DATA_temp};
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= 8'd1;
+                            end
+                        end
+                    end
+                    else begin 
+                        if (TRNG_working) begin   
+                            // after TRNG write
+                            if (TRNG_cnt < 8'd145 && cnt2 == 6'd20) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= DMODE_READ_temp; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt; 
+                            end
+                            // after TRNG read
+                            else if (TRNG_cnt < 8'd145 && cnt2 == 6'd40) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= 6'b11_1111; 
+                                DATA <= {7'd0, !DATA_temp};
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt; 
+                            end
+                            // after TRNG reset
+                            else if (TRNG_cnt < 8'd144 && cnt2 == 6'd60) begin
+                                clkgen_rstn <= 1'b1;
+                                cnt_rstn2 <= 1'b1;      
+
+                                csn <= 1'b0;
+                                wen <= 1'b0;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= RP_SEL_temp; 
+                                DMODE <= DMODE_WRITE_temp; 
+                                DATA <= {7'd0, DATA_temp};
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt + 1; 
+                            end
+                            // the last cycle
+                            else if (TRNG_cnt == 8'd144 && cnt2 == 6'd60) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b1;
+                                TRNG_DONE <= 1'b1;
+                                err <= 1'b0;
+                                TRNG_cnt <= TRNG_cnt + 1;                                 
+                            end
+                            else if (TRNG_cnt == 8'd145 && cnt2 == 6'd1) begin
+                                clkgen_rstn <= 1'b0;
+                                cnt_rstn2 <= 1'b0;      
+
+                                csn <= 1'b1;
+                                wen <= 1'b1;
+
+                                DETOUR <= 2'b00; 
+                                RP_SEL <= 1'b0; 
+                                DMODE <= 6'd0; 
+                                DATA <= 8'd0;
+                                // TRNG_MODE <= TRNG_MODE_temp;
+
+                                TRNG_working <= 1'b0;
+                                TRNG_DONE <= 1'b0;
+                                err <= 1'b0;
+                                TRNG_cnt <= 8'd0;                                 
+                            end
+                        end
+                        else begin
+                            clkgen_rstn   <= clkgen_rstn;
+                            cnt_rstn2     <= cnt_rstn2;
+
+                            csn           <= csn;
+                            wen           <= wen;
+
+                            DETOUR        <= DETOUR;
+                            RP_SEL        <= RP_SEL;
+                            DMODE         <= DMODE;
+                            DATA          <= DATA;
+                            // TRNG_MODE  <= TRNG_MODE;
+
+                            TRNG_working  <= TRNG_working;
+                            TRNG_DONE     <= TRNG_DONE;
+                            err           <= err;
+                            TRNG_cnt      <= TRNG_cnt;
+                        end
+                    end
+                end
+            end
             SET_VAR: begin
                 if (start) begin
                     // starting SET_VAR
@@ -206,7 +609,7 @@ always @(posedge clk) begin
                     // the first cycle after start signal
                     if (!WRITE_working) begin
                         // Error : when improper address is given
-                        if (ADDR > 113) begin
+                        if (ADDR > 12'd113) begin
                             clkgen_rstn <= 1'b0;
                             cnt_rstn <= 1'b0;      
 
@@ -273,7 +676,8 @@ always @(posedge clk) begin
                             csn <= 1'b0;
                             wen <= 1'b0;
 
-                            WR_ADDR <= ADDR[6:0] * 18;
+                            // WR_ADDR <= ADDR[6:0] * 18;   // optimized as below
+                            WR_ADDR <= {ADDR[6:0],4'd0} + {ADDR[6:0],1'b0};
                             DETOUR <= 2'b00; 
                             RP_SEL <= RP_SEL_temp; 
                             DMODE <= 6'b11_1111; 
@@ -438,7 +842,7 @@ always @(posedge clk) begin
                     // the first cycle after start signal
                     if (!READ_working) begin
                         // Error : when improper address is given
-                        if (ADDR > 113) begin
+                        if (ADDR > 12'd113) begin
                             clkgen_rstn <= 1'b0;
                             cnt_rstn <= 1'b0;      
 
@@ -467,7 +871,8 @@ always @(posedge clk) begin
                             csn <= 1'b0;
                             wen <= 1'b1;
 
-                            WR_ADDR <= ADDR[6:0] * 18;
+                            // WR_ADDR <= ADDR[6:0] * 18;   // optimized as below
+                            WR_ADDR <= {ADDR[6:0],4'd0} + {ADDR[6:0],1'b0};
                             DETOUR <= 2'b00; 
                             RP_SEL <= RP_SEL_temp; 
                             DMODE <= DMODE_READ_temp;
@@ -816,6 +1221,47 @@ always @(posedge clk) begin
                     end
                 end
             end
+            default: begin
+                csn           <= csn;
+                wen           <= wen;
+                DETOUR        <= DETOUR;
+                RP_SEL        <= RP_SEL;
+                DMODE         <= DMODE;
+                DATA          <= DATA;
+                TRNG_MODE     <= TRNG_MODE;
+                MEM_OUT       <= MEM_OUT;
+                MEM_OUT_BUF   <= MEM_OUT_BUF;
+                err           <= err;
+
+                // clock/counter reset controls
+                clkgen_rstn   <= clkgen_rstn;
+                cnt_rstn      <= cnt_rstn;
+                cnt_rstn2     <= cnt_rstn2;
+
+                // working/done flags
+                TRNG_working  <= TRNG_working;
+                SET_VAR_working <= SET_VAR_working;
+                WRITE_working <= WRITE_working;
+                READ_working  <= READ_working;
+
+                TRNG_DONE     <= TRNG_DONE;
+                READ_DONE     <= READ_DONE;
+                WRITE_DONE    <= WRITE_DONE;
+                SET_VAR_DONE  <= SET_VAR_DONE;
+
+                // operation signals
+                WR_ADDR       <= WR_ADDR;
+                WR_cnt        <= WR_cnt;
+                TRNG_cnt      <= TRNG_cnt;
+
+                // temp FFs for SET_VAR
+                DETOUR_temp       <= DETOUR_temp;
+                RP_SEL_temp       <= RP_SEL_temp;
+                DMODE_READ_temp   <= DMODE_READ_temp;
+                DMODE_WRITE_temp  <= DMODE_WRITE_temp;
+                TRNG_MODE_temp    <= TRNG_MODE_temp;
+                DATA_temp         <= DATA_temp;
+            end
         endcase
     end
 end
@@ -823,16 +1269,17 @@ end
 clk_generator clk_gen(clk_200, clk, clkgen_rstn);
 
 count_20 counter0(cnt, clk, cnt_rstn);
+count_60 counter1(cnt2, clk, cnt_rstn2);
 
 always @(*) begin
     // combined DONE signal
-    Done = SET_VAR_DONE || WRITE_DONE || READ_DONE || RNG_DONE;
+    Done = SET_VAR_DONE || WRITE_DONE || READ_DONE || TRNG_DONE;     //! TODO Done 두 사이클로 연장해서 나가게 만들기
 
     case (CMD)
-        // RNG: begin
-        //     ROW_ADDR <= WR_ADDR[10:4];
-        //     COL_ADDR <= WR_ADDR[3:0];        //! TODO 채우기. RNG_ADDR?
-        // end
+        TRNG: begin
+            ROW_ADDR <= ADDR[10:4];
+            COL_ADDR <= ADDR[3:0];  
+        end
         SET_VAR:begin
             ROW_ADDR <= ADDR[10:4];
             COL_ADDR <= ADDR[3:0];
@@ -866,6 +1313,26 @@ module count_20(
         end else begin
             if (q == 5'd20) begin
                 q <= 5'd1; 
+            end else begin
+                q <= q + 1; 
+            end
+        end
+    end
+
+endmodule
+
+module count_60(
+    output reg [5:0] q,
+    input clk,
+    input rstn
+);
+
+    always @(posedge clk) begin
+        if (!rstn) begin
+            q <= 6'd0;
+        end else begin
+            if (q == 6'd60) begin
+                q <= 6'd1; 
             end else begin
                 q <= q + 1; 
             end
